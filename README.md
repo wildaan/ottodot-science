@@ -21,12 +21,12 @@ Ottodot Trial Booking System is an end-to-end trial class reservation platform d
 - **Database & Backend Logic**: Supabase (PostgreSQL 15+ with PL/pgSQL Atomic RPC Functions)
 - **Styling**: Tailwind CSS v4 (Clean, high-contrast, responsive UI)
 - **Internationalization**: `next-intl` (Dual language support: English `en` & Indonesian `id`)
-- **Testing**: `ts-node` / Jest / Vitest test runner for real transactional and concurrent test executions
+- **Testing**: `ts-node` script-based test runner for direct transactional and concurrent test execution against the live database
 - **Deployment**: Vercel Serverless Edge Platform
 
 ### Why no Express or Prisma?
 - **Native Alignment**: Directly matches Ottodot's existing stack and architecture.
-- **Atomic Concurrency Guarantee**: Prisma and external ORMs introduce additional abstraction layers that complicate row-level database locking (`SELECT ... FOR UPDATE`). Managing transactional invariants directly via PostgreSQL RPC ensures sub-millisecond atomic transactions independent of Node.js serverless execution lifecycles.
+- **Atomic Concurrency Guarantee**: Prisma and external ORMs introduce additional abstraction layers that complicate row-level database locking (`SELECT ... FOR UPDATE`). Managing transactional invariants directly via PostgreSQL RPC ensures atomic transactions are enforced by the database itself, independent of Node.js serverless execution lifecycles.
 - **Zero Overhead**: Eliminates boilerplate routing layers, reducing cold-start latency on serverless edge functions.
 
 ---
@@ -43,12 +43,12 @@ npm install
 ### 2. Setup Supabase Project
 1. Create a free PostgreSQL project on [Supabase](https://supabase.com).
 2. Open the **SQL Editor** in your Supabase Dashboard.
-3. Copy the entire contents of [`migration/migration.sql`](file:///c:/Users/thinkpad_laptop/Pictures/Project%20MKI/ottodot/FE/migration/migration.sql) and execute it. This creates all 5 tables, indexes, constraints, atomic RPC functions, and seeds realistic test data.
+3. Copy the entire contents of [`migration/migration.sql`](migration/migration.sql) and execute it. This creates all 5 tables, indexes, constraints, atomic RPC functions, and seeds realistic test data.
 
 ### 3. Configure Environment Variables
-Create a `.env.local` file in the project root by copying `.env.example`:
+Create a `.env` file in the project root by copying `.env.example`:
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
 Fill in your Supabase credentials:
@@ -83,7 +83,7 @@ npx ts-node src/__tests__/concurrent.test.ts
 - **Teacher & Admin Roster View (`/roster`)**: Class capacity inspection table showing confirmed attendees, occupied/available seats, and student age details.
 - **Atomic Booking Engine (PostgreSQL RPC)**: Single-transaction database function handling concurrency locking, capacity validation, state mutation, and payment log persistence.
 - **Dual Language Support (`en` & `id`)**: Seamless locale switching with preserved routing context via `next-intl`.
-- **Automated Concurrency Suite**: Test harness evaluating burst parallel booking requests with sub-millisecond execution.
+- **Automated Concurrency Suite**: Test harness evaluating burst parallel booking requests against live database constraints.
 
 ---
 
@@ -238,10 +238,10 @@ END IF;
 
 #### Why This Approach Over Alternatives?
 1. **Vs. Optimistic Concurrency Control (OCC / version numbers)**: OCC requires retry loops in the Node.js application layer. Under burst concurrent clicks on the last seat, OCC causes multiple failed retries and high database query thrashing. Pessimistic row locking sequences requests deterministically in order of arrival.
-2. **Vs. Application-Level Mutexes (Redis / In-Memory Lock)**: In serverless environments (e.g., Vercel), Node.js instances are distributed and ephemeral; in-memory locks do not work across serverless lambdas. Relying on PostgreSQL's internal lock manager guarantees 100% ACID safety with zero external infrastructure overhead (no Redis required).
+2. **Vs. Application-Level Mutexes (Redis / In-Memory Lock)**: In serverless environments (e.g., Vercel), Node.js instances are distributed and ephemeral; in-memory locks do not work across serverless lambdas. Relying on PostgreSQL's built-in ACID guarantees and lock manager avoids the need for external infrastructure like Redis.
 
 #### Trade-offs Accepted
-- **Row-level Serialization**: Requests for the *same* class row wait briefly (a few milliseconds) for the lock to release. Because the transaction performs only lightweight indexed inserts and updates, lock duration is sub-5ms, keeping overall system throughput exceptionally high while ensuring zero overbooking.
+- **Row-level Serialization**: Requests for the *same* class row wait briefly (a few milliseconds) for the lock to release. Because the transaction performs only lightweight indexed inserts and updates, the lock is held very briefly, minimizing impact on overall throughput while ensuring zero overbooking. Exact lock duration under production load was not benchmarked in this exercise and would be worth measuring before scaling.
 
 ---
 
@@ -276,7 +276,7 @@ END IF;
 ## What I'd Monitor After Release
 
 1. **`CLASS_FULL` Rejection Spike**: High rejection rates indicate strong demand, providing actionable signal to open additional class slots.
-2. **PostgreSQL Row Lock Wait Time**: Monitored via `pg_stat_activity` to ensure lock wait times on `book_trial_class` stay below 15ms during peak traffic.
+2. **PostgreSQL Row Lock Wait Time**: Monitored via `pg_stat_activity` to catch abnormal lock wait times on `book_trial_class` as traffic grows — no baseline threshold has been established yet since this wasn't load-tested.
 3. **Payment Failure Rate per Provider**: Alerting on abnormal failure ratios to identify upstream payment gateway issues.
 4. **Duplicate Booking Attempt Frequency**: Identifies frontend UX lag (e.g., if users repeatedly double-click un-disabled buttons).
 

@@ -26,12 +26,6 @@ AI_USAGE.MD
 CLAUDE.md
 CLAUDE.MD
 
-# Feature: Student Management (to be added manually later)
-src/app/**/students/
-src/app/**/students/**
-src/components/students/
-src/app/api/students/
-src/validations/studentSchema.ts
 
 # next.js
 /.next/

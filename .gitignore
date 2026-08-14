@@ -12,20 +12,14 @@
 
 # testing & reports
 /coverage
-src/__tests__/
-src/__test__/
 QA_REPORT.md
 QA_REPORT.MD
 fixed_req.md
 
 # AI docs / agents
 AGENTS.md
-AGENTS.MD
 AI_USAGE.md
-AI_USAGE.MD
 CLAUDE.md
-CLAUDE.MD
-
 
 # next.js
 /.next/

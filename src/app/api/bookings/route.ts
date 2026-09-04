@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { bookingService } from '@/services/bookingService';
+import { bookingService, BookingLocale } from '@/services/bookingService';
 
-/** GET /api/bookings?parent_uuid=xxx — riwayat booking milik parent */
+function getLocale(request: NextRequest, bodyLocale?: string): BookingLocale {
+  if (bodyLocale === 'id' || bodyLocale === 'en') return bodyLocale;
+  const queryLocale = request.nextUrl.searchParams.get('locale');
+  if (queryLocale === 'id' || queryLocale === 'en') return queryLocale;
+  const acceptLang = request.headers.get('accept-language') || '';
+  return acceptLang.startsWith('id') ? 'id' : 'en';
+}
+
+/** GET /api/bookings?parent_uuid=xxx — parent booking history */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const parentUuid = searchParams.get('parent_uuid');
@@ -10,16 +18,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'parent_uuid is required' }, { status: 400 });
   }
 
-  const result = await bookingService.getBookingsByParent(parentUuid);
+  const locale = getLocale(request);
+  const result = await bookingService.getBookingsByParent(parentUuid, locale);
   if (!result.success) {
     return NextResponse.json({ success: false, error: result.error }, { status: 500 });
   }
   return NextResponse.json({ success: true, data: result.data });
 }
 
-/** POST /api/bookings — buat booking baru via RPC */
+/** POST /api/bookings — create new booking via RPC */
 export async function POST(request: NextRequest) {
-  let body: { student_uuid?: string; class_uuid?: string; payment_success?: boolean };
+  let body: { student_uuid?: string; class_uuid?: string; payment_success?: boolean; locale?: BookingLocale };
   try {
     body = await request.json();
   } catch {
@@ -34,11 +43,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = await bookingService.bookTrialClass({
-    studentUuid: student_uuid,
-    classUuid: class_uuid,
-    paymentSuccess: payment_success ?? true,
-  });
+  const locale = getLocale(request, body.locale);
+  const result = await bookingService.bookTrialClass(
+    {
+      studentUuid: student_uuid,
+      classUuid: class_uuid,
+      paymentSuccess: payment_success ?? true,
+    },
+    locale
+  );
 
   if (!result.success) {
     // Return 409 for business-logic errors (duplicate / full), 500 for unknown

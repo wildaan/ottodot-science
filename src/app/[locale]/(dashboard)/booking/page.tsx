@@ -13,7 +13,7 @@ import {
   RefreshCw,
   CreditCard,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
@@ -55,6 +55,7 @@ export default function BookingPage() {
   const t = useTranslations('Booking');
   const tc = useTranslations('Common');
   const ts = useTranslations('Status');
+  const locale = useLocale();
 
   // ---- Remote data state ----
   const [parents, setParents] = React.useState<Parent[]>([]);
@@ -121,7 +122,7 @@ export default function BookingPage() {
     if (!parentUuid) return;
     setIsLoadingBookings(true);
     try {
-      const res = await fetch(`/api/bookings?parent_uuid=${parentUuid}`);
+      const res = await fetch(`/api/bookings?parent_uuid=${parentUuid}&locale=${locale}`);
       const json = await res.json();
       setBookings(json.success ? json.data : []);
     } catch {
@@ -129,7 +130,7 @@ export default function BookingPage() {
     } finally {
       setIsLoadingBookings(false);
     }
-  }, []);
+  }, [locale]);
 
   // Initial load
   React.useEffect(() => {
@@ -167,6 +168,7 @@ export default function BookingPage() {
           student_uuid: selectedStudentUuid,
           class_uuid: selectedClassUuid,
           payment_success: paymentSuccess,
+          locale,
         }),
       });
 
@@ -175,20 +177,22 @@ export default function BookingPage() {
       if (!json.success) {
         const code = json.errorCode as string;
         if (code === 'DUPLICATE_BOOKING') {
-          setFeedback({ type: 'error_duplicate', message: json.error });
+          setFeedback({ type: 'error_duplicate', message: t('errorDuplicate') || json.error });
         } else if (code === 'CLASS_FULL') {
-          setFeedback({ type: 'error_full', message: json.error });
+          setFeedback({ type: 'error_full', message: t('errorFull') || json.error });
           // Refresh classes to show updated count
           const cr = await fetch('/api/trial-classes').then((r) => r.json());
           if (cr.success) setClasses(cr.data);
+        } else if (code === 'CLASS_NOT_FOUND') {
+          setFeedback({ type: 'error_unknown', message: t('errorNotFound') || json.error });
         } else {
-          setFeedback({ type: 'error_unknown', message: json.error || tc('errorOccurred') });
+          setFeedback({ type: 'error_unknown', message: t('errorBookingFailed') || json.error || tc('errorOccurred') });
         }
         return;
       }
 
       // Payment success path
-      const finalState: BookingState = json.data.bookings_state;
+      const finalState: BookingState = json.data?.bookings_state ?? json.data?.r_bookings_state;
       if (finalState === 'confirmed') {
         setFeedback({ type: 'success', message: t('feedbackSuccess') });
       } else {
@@ -198,7 +202,7 @@ export default function BookingPage() {
       // Refresh both classes (slot count updated) and bookings
       const [cr, br] = await Promise.all([
         fetch('/api/trial-classes').then((r) => r.json()),
-        fetch(`/api/bookings?parent_uuid=${selectedParentUuid}`).then((r) => r.json()),
+        fetch(`/api/bookings?parent_uuid=${selectedParentUuid}&locale=${locale}`).then((r) => r.json()),
       ]);
       if (cr.success) setClasses(cr.data);
       if (br.success) setBookings(br.data);
@@ -289,17 +293,17 @@ export default function BookingPage() {
   const FeedbackBanner = () => {
     if (!feedback) return null;
     const cfg = {
-      success: { bg: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-800', Icon: CheckCircle2, iconColor: 'text-emerald-500' },
-      error_duplicate: { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-800', Icon: AlertCircle, iconColor: 'text-amber-500' },
-      error_full: { bg: 'bg-rose-50 border-rose-100', text: 'text-rose-800', Icon: XCircle, iconColor: 'text-rose-500' },
-      error_payment: { bg: 'bg-slate-50 border-slate-200', text: 'text-slate-700', Icon: CreditCard, iconColor: 'text-slate-500' },
-      error_unknown: { bg: 'bg-rose-50 border-rose-100', text: 'text-rose-800', Icon: AlertCircle, iconColor: 'text-rose-500' },
+      success: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-800', Icon: CheckCircle2, iconColor: 'text-emerald-600' },
+      error_duplicate: { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-800', Icon: AlertCircle, iconColor: 'text-amber-600' },
+      error_full: { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-800', Icon: XCircle, iconColor: 'text-rose-600' },
+      error_payment: { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-800', Icon: AlertCircle, iconColor: 'text-rose-600' },
+      error_unknown: { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-800', Icon: AlertCircle, iconColor: 'text-rose-600' },
     }[feedback.type];
 
     return (
-      <div className={`${cfg.bg} border rounded-xl p-3 flex items-start gap-2.5 text-xs ${cfg.text} animate-[fadeIn_0.3s_ease-out]`}>
+      <div className={`${cfg.bg} border rounded-xl p-3.5 flex items-start gap-2.5 text-xs ${cfg.text} shadow-xs animate-[fadeIn_0.3s_ease-out]`}>
         <cfg.Icon className={`w-4 h-4 ${cfg.iconColor} shrink-0 mt-0.5`} />
-        <span>{feedback.message}</span>
+        <span className="font-medium leading-relaxed">{feedback.message}</span>
       </div>
     );
   };
@@ -394,7 +398,7 @@ export default function BookingPage() {
                         onChange={(e) => setSelectedStudentUuid(e.target.value)}
                         className="border-slate-200 rounded-xl focus:border-teal-500 bg-white font-medium text-slate-700 shadow-2xs w-full"
                         options={childrenOfParent.map((s) => ({
-                          label: `${s.students_name ?? '—'} (${s.students_age} thn)`,
+                          label: `${s.students_name ?? '—'} (${s.students_age} ${t('ageSuffixShort')})`,
                           value: s.students_uuid,
                         }))}
                       />
@@ -427,7 +431,7 @@ export default function BookingPage() {
                             >
                               <div className="flex items-start justify-between gap-2 mb-1">
                                 <h4 className="font-display font-bold text-slate-800 text-sm leading-tight">
-                                  {cls.trial_classes_subject ?? 'Kelas tanpa nama'}
+                                  {cls.trial_classes_subject ?? t('untitledClass')}
                                 </h4>
                                 {isFull && (
                                   <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md shrink-0">
@@ -440,6 +444,14 @@ export default function BookingPage() {
                                 filled={cls.trial_classes_confirmed_count}
                                 total={cls.trial_classes_capacity}
                                 mode="left"
+                                label={
+                                  cls.trial_classes_capacity - cls.trial_classes_confirmed_count <= 0
+                                    ? t('classFull')
+                                    : t('slotsRemaining', {
+                                        remaining: cls.trial_classes_capacity - cls.trial_classes_confirmed_count,
+                                        total: cls.trial_classes_capacity,
+                                      })
+                                }
                               />
                             </div>
                           );
@@ -449,20 +461,28 @@ export default function BookingPage() {
                   </div>
 
                   {/* Payment Success Toggle (for testing) */}
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 space-y-1.5">
-                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
-                      {t('simulationHeader')}
-                    </p>
-                    <label className="flex items-center justify-between cursor-pointer gap-3">
-                      <span className="text-xs text-amber-800 font-medium">
-                        {paymentSuccess ? t('simulationSuccess') : t('simulationFailed')}
-                      </span>
+                  <div
+                    className={`border rounded-xl p-3.5 space-y-2 transition-all duration-200 ${
+                      paymentSuccess
+                        ? 'bg-emerald-50/70 border-emerald-200'
+                        : 'bg-rose-50/70 border-rose-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p
+                        className={`text-[10px] font-bold uppercase tracking-wider ${
+                          paymentSuccess ? 'text-emerald-700' : 'text-rose-700'
+                        }`}
+                      >
+                        {t('simulationHeader')}
+                      </p>
                       <button
                         type="button"
                         onClick={() => setPaymentSuccess(!paymentSuccess)}
                         className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${
                           paymentSuccess ? 'bg-emerald-500' : 'bg-slate-300'
                         }`}
+                        title={paymentSuccess ? t('simulationSuccess') : t('simulationFailed')}
                       >
                         <span
                           className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
@@ -470,7 +490,21 @@ export default function BookingPage() {
                           }`}
                         />
                       </button>
-                    </label>
+                    </div>
+                    <p
+                      className={`text-xs font-semibold ${
+                        paymentSuccess ? 'text-emerald-900' : 'text-rose-900'
+                      }`}
+                    >
+                      {paymentSuccess ? t('simulationSuccess') : t('simulationFailed')}
+                    </p>
+                    <p
+                      className={`text-[11px] leading-relaxed ${
+                        paymentSuccess ? 'text-emerald-700/80' : 'text-rose-700/80'
+                      }`}
+                    >
+                      {paymentSuccess ? t('simulationSuccessDesc') : t('simulationFailedDesc')}
+                    </p>
                   </div>
 
                   <FeedbackBanner />

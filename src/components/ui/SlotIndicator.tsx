@@ -5,9 +5,10 @@ interface SlotIndicatorProps {
   total: number;
   mode?: 'left' | 'filled';
   className?: string;
+  label?: React.ReactNode;
 }
 
-export function SlotIndicator({ filled, total, mode = 'left', className = '' }: SlotIndicatorProps) {
+export function SlotIndicator({ filled, total, mode = 'left', className = '', label }: SlotIndicatorProps) {
   const percentage = Math.min(100, Math.max(0, (filled / total) * 100));
   const remaining = Math.max(0, total - filled);
 
@@ -23,19 +24,18 @@ export function SlotIndicator({ filled, total, mode = 'left', className = '' }: 
     textColor = 'text-amber-600 font-semibold';
   }
 
+  const defaultText =
+    mode === 'left'
+      ? remaining === 0
+        ? 'Class Full'
+        : `${remaining} of ${total} slots remaining`
+      : `${filled} of ${total} slots filled`;
+
   return (
     <div className={`space-y-1.5 ${className}`}>
       <div className="flex justify-between items-center text-xs">
         <span className={`${textColor}`}>
-          {mode === 'left' ? (
-            remaining === 0 ? (
-              'Kelas Penuh'
-            ) : (
-              `${remaining} dari ${total} slot tersisa`
-            )
-          ) : (
-            `${filled} dari ${total} slot terisi`
-          )}
+          {label ?? defaultText}
         </span>
         <span className="text-slate-400 font-medium">{Math.round(percentage)}%</span>
       </div>

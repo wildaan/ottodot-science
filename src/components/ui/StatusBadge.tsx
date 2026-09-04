@@ -44,10 +44,10 @@ export function StatusBadge({ status, className = '' }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${config.bgClass} ${config.textClass} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 ${config.bgClass} ${config.textClass} ${className}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} />
-      <span>{t(status) || status}</span>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dotClass}`} />
+      <span className="whitespace-nowrap">{t(status) || status}</span>
     </span>
   );
 }
